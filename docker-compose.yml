@@ -1,0 +1,36 @@
+version: "3.4"
+
+services:
+  phpinfo:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      # target: united_app_dev
+      target: united_app
+    volumes:
+      - ./demo/info:/srv/app/public
+    restart: unless-stopped
+    ports:
+      - 8080:8080
+    # Have to enable TTY
+    tty: true
+    healthcheck:
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
+  symfony:
+    build:
+      context: ./demo/symfony
+      dockerfile: ./Dockerfile
+      target: symfony_app
+    restart: unless-stopped
+    ports:
+      - 8181:8080
+    # Have to enable TTY
+    tty: true
+    healthcheck:
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 30s
