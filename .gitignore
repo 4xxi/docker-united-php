@@ -1,5 +1,9 @@
 .DS_Store
 build_image.sh
+buildx_image.sh
 vendor
 var
 public/build
+act.sh
+.secrets
+.env
