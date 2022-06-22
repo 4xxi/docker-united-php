@@ -2,6 +2,7 @@ version: "3.4"
 
 services:
   phpinfo:
+    image: 4xxi/united-php:${PHP_VERSION}
     build:
       context: .
       dockerfile: ./Dockerfile
@@ -14,12 +15,15 @@ services:
       - 8080:8080
     # Have to enable TTY
     tty: true
+    networks:
+      - container
     healthcheck:
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 30s
   symfony:
+    image: 4xxi/united-php:${PHP_VERSION}
     build:
       context: ./demo/symfony
       dockerfile: ./Dockerfile
@@ -29,8 +33,13 @@ services:
       - 8181:8080
     # Have to enable TTY
     tty: true
+    networks:
+      - container
     healthcheck:
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 30s
+
+networks:
+  container:

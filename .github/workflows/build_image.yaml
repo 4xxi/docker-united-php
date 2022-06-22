@@ -1,4 +1,4 @@
-name: ci
+name: Docker Build
 
 on:
   push:
@@ -10,43 +10,124 @@ on:
     branches:
       - "main"
 
+env:
+  DOCKER_IMAGE: 4xxi/united-php
+  DOCKER_COMPOSE_VERSION: v2.6.0
+
 jobs:
-  docker:
+  build:
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        php_version: [7.4.30, 8.0.20, 8.1.7, 8.2.0alpha1, latest]
+        # php_version: [8.0.20]
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          # list of Docker images to use as base name for tags
-          images: |
-            4xxi/united-php
-          # generate Docker tags based on the following events/attributes
-          tags: |
-            type=schedule
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v2
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
+
       - name: Login to DockerHub
-        if: github.event_name != 'pull_request'
         uses: docker/login-action@v2
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_TOKEN }}
-      - name: Build and push
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Get the version
+        id: get_version
+        run: |
+          VERSION=${{ matrix.php_version }}
+          PREFIX="edge-"
+          SUFFIX="-alpine"
+          LATEST_TAG=edge
+          LATEST_TAGS="${DOCKER_IMAGE}:edge,${DOCKER_IMAGE}:unstable"
+
+          if [[ $VERSION == "latest" ]]; then
+              SUFFIX=""
+          fi
+
+          if [[ $GITHUB_REF == refs/tags/* && ${VERSION:5:5} != "alpha" ]]; then
+              PREFIX=""
+              LATEST_TAG=stable
+              LATEST_TAGS="${DOCKER_IMAGE}:latest,${DOCKER_IMAGE}:stable"
+          fi
+
+          echo ::set-output name=prefix::${PREFIX}
+          echo ::set-output name=suffix::${SUFFIX}
+          echo ::set-output name=minor_version::${VERSION:0:3}
+          echo ::set-output name=full_version::${VERSION}
+          echo ::set-output name=latest_tag::${LATEST_TAG}
+          echo ::set-output name=latest_tags::${LATEST_TAGS}
+
+      - name: Prepare
+        id: prepare
+        env:
+          PHP_VERSION: ${{ steps.get_version.outputs.minor_version }}
+          FULL_PHP_VERSION: ${{ steps.get_version.outputs.full_version }}
+        run: |
+          echo ::set-output name=docker_image::${DOCKER_IMAGE}
+          echo ::set-output name=minor_version::${PHP_VERSION}
+          echo ::set-output name=patch_version::${FULL_PHP_VERSION}
+
+      - name: Build and Push (latest)
+        if: success() && matrix.php_version == 'latest'
         uses: docker/build-push-action@v3
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
-          push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          file: ./Dockerfile
+          push: true
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:latest
+          cache-to: type=inline
+          tags: ${{ steps.get_version.outputs.latest_tags }}
+          build-args: |
+            VERSION=${{ steps.get_version.outputs.latest_tag }}
+            PHP_VERSION=alpine
+            FULL_PHP_VERSION=alpine
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VCS_REF=${GITHUB_SHA::8}
+
+      - name: Build and Push (version)
+        if: success() && matrix.php_version != 'latest'
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          file: ./Dockerfile
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:${{ steps.prepare.outputs.minor_version }}
+          cache-to: type=inline
+          push: true
+          tags: |
+            ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.minor_version }}
+            ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.patch_version }}
+          build-args: |
+            VERSION=${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.patch_version }}
+            PHP_VERSION=${{ steps.prepare.outputs.minor_version }}
+            FULL_PHP_VERSION=${{ steps.prepare.outputs.patch_version }}${{ steps.get_version.outputs.suffix }}
+            BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
+            VCS_REF=${GITHUB_SHA::8}
+
+      - name: Inspect (latest)
+        if: success() && matrix.php_version == 'latest'
+        run: docker buildx imagetools inspect ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.latest_tag }}
+
+      - name: Inspect (version)
+        if: success() && matrix.php_version != 'latest'
+        run: |
+          docker buildx imagetools inspect ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.minor_version }}
+          docker buildx imagetools inspect ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.patch_version }}
+
+      # - name: Setup docker-compose
+      # - run: sudo curl -L https://github.com/docker/compose/releases/download/${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
+      # - run: sudo chmod +x /usr/local/bin/docker-compose
+
+      # - name: Build the stack
+      #   run: PHP_VERSION=${{ steps.prepare.outputs.minor_version }} docker-compose up --no-build -d
+      # - name: Test phpinfo
+      #   run: docker run --network container:phpinfo alpine/curl -s --retry 10 --retry-connrefused http://localhost:8080/
+      # - name: Test Symfony app
+      #   run: docker run --network container:phpinfo alpine/curl -s --retry 10 --retry-connrefused http://localhost:8181/
+      # - name: Dump docker logs on failure
+      #   if: failure()
+      #   uses: jwalton/gh-docker-logs@v1
