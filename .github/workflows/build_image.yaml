@@ -128,6 +128,6 @@ jobs:
       #   run: docker run --network container:phpinfo alpine/curl -s --retry 10 --retry-connrefused http://localhost:8080/
       # - name: Test Symfony app
       #   run: docker run --network container:phpinfo alpine/curl -s --retry 10 --retry-connrefused http://localhost:8181/
-      # - name: Dump docker logs on failure
-      #   if: failure()
-      #   uses: jwalton/gh-docker-logs@v1
+      - name: Dump docker logs on failure
+        if: failure()
+        uses: jwalton/gh-docker-logs@v1
