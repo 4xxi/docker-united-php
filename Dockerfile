@@ -4,12 +4,12 @@
 
 
 # https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
-ARG PHP_VERSION=8.1
-ARG ALPINE_VERSION=3.16
+ARG PHP_VERSION=8.1-fpm
+ARG OS_VERSION=alpine3.15
 ARG CADDY_VERSION=2
 
 # "php" stage
-FROM php:${PHP_VERSION}-fpm-alpine${ALPINE_VERSION} AS united_php
+FROM php:${PHP_VERSION}-${OS_VERSION} AS united_php
 
 # persistent / runtime deps
 RUN apk add --no-cache \
