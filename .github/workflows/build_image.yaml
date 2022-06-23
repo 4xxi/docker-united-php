@@ -21,7 +21,7 @@ jobs:
 
     strategy:
       matrix:
-        php_version: [7.4.30-fpm, 8.0.20-fpm, 8.1.7-fpm, 8.2.0alpha1-fpm]
+        php_version: [7.4.30, 8.0.20, 8.1.7, 8.2.0]
         os_verion: [alpine3.15]
         # php_version: [8.0.20]
 
@@ -43,7 +43,7 @@ jobs:
         run: |
           VERSION=${{ matrix.php_version }}
           PREFIX="edge-"
-          SUFFIX="-alpine"
+          SUFFIX="-${{ matrix.os_verion }}"
           LATEST_TAG=edge
           LATEST_TAGS="${DOCKER_IMAGE}:edge,${DOCKER_IMAGE}:unstable"
 
