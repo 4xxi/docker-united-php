@@ -4,10 +4,10 @@
 
 
 # https://docs.docker.com/engine/reference/builder/#understand-how-arg-and-from-interact
-ARG PHP_VERSION=8.1.7
-ARG FULL_PHP_VERSION=8.1.7-alpine3.15
+ARG PHP_VERSION=8.1.12
+ARG FULL_PHP_VERSION=8.1.12-alpine3.15
 ARG OS_VERSION=alpine3.15
-ARG CADDY_VERSION=2
+ARG CADDY_VERSION=2.6.2
 
 # "php" stage
 FROM php:${FULL_PHP_VERSION} AS united_php
