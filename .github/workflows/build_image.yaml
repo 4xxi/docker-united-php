@@ -57,22 +57,22 @@ jobs:
               LATEST_TAGS="${DOCKER_IMAGE}:latest,${DOCKER_IMAGE}:stable"
           fi
 
-          echo ::set-output name=prefix::${PREFIX}
-          echo ::set-output name=suffix::${SUFFIX}
-          echo ::set-output name=minor_version::${VERSION:0:3}
-          echo ::set-output name=full_version::${VERSION}
-          echo ::set-output name=latest_tag::${LATEST_TAG}
-          echo ::set-output name=latest_tags::${LATEST_TAGS}
+          echo ::save-state name=prefix::${PREFIX}
+          echo ::save-state name=suffix::${SUFFIX}
+          echo ::save-state name=minor_version::${VERSION:0:3}
+          echo ::save-state name=full_version::${VERSION}
+          echo ::save-state name=latest_tag::${LATEST_TAG}
+          echo ::save-state name=latest_tags::${LATEST_TAGS}
 
       - name: Prepare
         id: prepare
         env:
-          PHP_VERSION: ${{ steps.get_version.outputs.minor_version }}
-          FULL_PHP_VERSION: ${{ steps.get_version.outputs.full_version }}
+          PHP_VERSION: ${{ steps.get_version.states.minor_version }}
+          FULL_PHP_VERSION: ${{ steps.get_version.states.full_version }}
         run: |
-          echo ::set-output name=docker_image::${DOCKER_IMAGE}
-          echo ::set-output name=minor_version::${PHP_VERSION}
-          echo ::set-output name=patch_version::${FULL_PHP_VERSION}
+          echo ::save-state name=docker_image::${DOCKER_IMAGE}
+          echo ::save-state name=minor_version::${PHP_VERSION}
+          echo ::save-state name=patch_version::${FULL_PHP_VERSION}
 
       - name: Build and Push (latest)
         if: success() && matrix.php_version == 'latest'
@@ -83,9 +83,9 @@ jobs:
           push: true
           cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:latest
           cache-to: type=inline
-          tags: ${{ steps.get_version.outputs.latest_tags }}
+          tags: ${{ steps.get_version.states.latest_tags }}
           build-args: |
-            VERSION=${{ steps.get_version.outputs.latest_tag }}
+            VERSION=${{ steps.get_version.states.latest_tag }}
             PHP_VERSION=alpine
             FULL_PHP_VERSION=alpine
             BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -97,35 +97,35 @@ jobs:
         with:
           context: .
           file: ./Dockerfile
-          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:${{ steps.prepare.outputs.minor_version }}
+          cache-from: type=registry,ref=${{ env.DOCKER_IMAGE }}:${{ steps.prepare.states.minor_version }}
           cache-to: type=inline
           push: true
           tags: |
-            ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.minor_version }}
-            ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.patch_version }}
+            ${{ steps.prepare.states.docker_image }}:${{ steps.get_version.states.prefix }}${{ steps.prepare.states.minor_version }}
+            ${{ steps.prepare.states.docker_image }}:${{ steps.get_version.states.prefix }}${{ steps.prepare.states.patch_version }}
           build-args: |
-            VERSION=${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.patch_version }}
-            PHP_VERSION=${{ steps.prepare.outputs.minor_version }}
-            FULL_PHP_VERSION=${{ steps.prepare.outputs.patch_version }}${{ steps.get_version.outputs.suffix }}
+            VERSION=${{ steps.get_version.states.prefix }}${{ steps.prepare.states.patch_version }}
+            PHP_VERSION=${{ steps.prepare.states.minor_version }}
+            FULL_PHP_VERSION=${{ steps.prepare.states.patch_version }}${{ steps.get_version.states.suffix }}
             BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
             VCS_REF=${GITHUB_SHA::8}
 
       - name: Inspect (latest)
         if: success() && matrix.php_version == 'latest'
-        run: docker buildx imagetools inspect ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.latest_tag }}
+        run: docker buildx imagetools inspect ${{ steps.prepare.states.docker_image }}:${{ steps.get_version.states.latest_tag }}
 
       - name: Inspect (version)
         if: success() && matrix.php_version != 'latest'
         run: |
-          docker buildx imagetools inspect ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.minor_version }}
-          docker buildx imagetools inspect ${{ steps.prepare.outputs.docker_image }}:${{ steps.get_version.outputs.prefix }}${{ steps.prepare.outputs.patch_version }}
+          docker buildx imagetools inspect ${{ steps.prepare.states.docker_image }}:${{ steps.get_version.states.prefix }}${{ steps.prepare.states.minor_version }}
+          docker buildx imagetools inspect ${{ steps.prepare.states.docker_image }}:${{ steps.get_version.states.prefix }}${{ steps.prepare.states.patch_version }}
 
       # - name: Setup docker-compose
       # - run: sudo curl -L https://github.com/docker/compose/releases/download/${{ env.DOCKER_COMPOSE_VERSION }}/docker-compose-`uname -s`-`uname -m` -o /usr/local/bin/docker-compose
       # - run: sudo chmod +x /usr/local/bin/docker-compose
 
       # - name: Build the stack
-      #   run: PHP_VERSION=${{ steps.prepare.outputs.minor_version }} docker-compose up --no-build -d
+      #   run: PHP_VERSION=${{ steps.prepare.states.minor_version }} docker-compose up --no-build -d
       # - name: Test phpinfo
       #   run: docker run --network container:phpinfo alpine/curl -s --retry 10 --retry-connrefused http://localhost:8080/
       # - name: Test Symfony app
